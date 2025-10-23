@@ -3,18 +3,24 @@
 public class FollowPlayerX : MonoBehaviour
 {
     [Header("Camera Follow Settings")]
-    public GameObject plane;   // Assign your plane in the Inspector
-    private Vector3 offset=new Vector3(30,0,10);    // The distance between camera and plane
+    public GameObject plane; // Assign this in Inspector
+
+    private Vector3 offset;
 
     void Start()
     {
-        // Calculate the initial offset between the camera and the plane
-        offset = transform.position - plane.transform.position;
+        // Position behind and above the plane
+        offset = new Vector3(0, 5, -15);
     }
 
     void LateUpdate()
     {
-        // Update camera position to follow the plane
+        if (plane == null) return; // Safety check
+
+        // Move camera to plane position + offset
         transform.position = plane.transform.position + offset;
+
+        // Rotate camera to look at plane
+        transform.LookAt(plane.transform);
     }
 }
