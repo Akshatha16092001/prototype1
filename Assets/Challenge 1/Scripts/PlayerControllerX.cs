@@ -10,7 +10,7 @@ public class PlayerControllerX : MonoBehaviour
     private float horizontalInput;      // Left/right input (arrow keys or A/D)
     void Start()
     {
-        
+        //start
     }
 
     void Update()

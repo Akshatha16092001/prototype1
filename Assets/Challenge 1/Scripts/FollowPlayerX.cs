@@ -4,7 +4,7 @@ public class FollowPlayerX : MonoBehaviour
 {
     [Header("Camera Follow Settings")]
     public GameObject plane;   // Assign your plane in the Inspector
-    private Vector3 offset;    // The distance between camera and plane
+    private Vector3 offset=new Vector3(30,0,10);    // The distance between camera and plane
 
     void Start()
     {
