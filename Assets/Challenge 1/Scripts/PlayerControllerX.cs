@@ -8,6 +8,10 @@ public class PlayerControllerX : MonoBehaviour
 
     private float verticalInput;        // Up/down input (arrow keys or W/S)
     private float horizontalInput;      // Left/right input (arrow keys or A/D)
+    void Start()
+    {
+        
+    }
 
     void Update()
     {
@@ -16,10 +20,10 @@ public class PlayerControllerX : MonoBehaviour
         horizontalInput = Input.GetAxis("Horizontal"); // A/D or Left/Right
 
         // --- Move plane forward constantly ---
-        transform.Translate(Vector3.forward * speed * Time.deltaTime);
+        transform.Translate(Vector3.forward * speed * Time.deltaTime * verticalInput);
 
         // --- Tilt plane up/down based on vertical input ---
-        transform.Rotate(Vector3.right * rotationSpeed * Time.deltaTime * verticalInput);
+        //transform.Rotate(Vector3.right * rotationSpeed * Time.deltaTime * verticalInput);
 
         // --- Turn plane left/right based on horizontal input ---
         transform.Rotate(Vector3.up * rotationSpeed * Time.deltaTime * horizontalInput);
