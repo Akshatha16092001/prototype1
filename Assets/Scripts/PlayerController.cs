@@ -15,6 +15,8 @@ public class PlayerController : MonoBehaviour
     private float currentSpeed;
 
     public bool canMove = true;
+    public ParticleSystem dustTrail; // Drag your DustTrail particle system here in Inspector
+
 
     [Header("Sound Settings")]
     public AudioClip engineSound;
@@ -68,6 +70,12 @@ public class PlayerController : MonoBehaviour
         // 🎵 Adjust engine pitch with speed
         if (playerAudio.clip == engineSound)
             playerAudio.pitch = 1f + (currentSpeed / maxSpeed) * 0.5f;
+            if (dustTrail != null)
+{
+    var emission = dustTrail.emission;
+    emission.enabled = Mathf.Abs(forwardInput) > 0.1f; // emit only when moving
+}
+
     }
 
     void OnCollisionEnter(Collision collision)
