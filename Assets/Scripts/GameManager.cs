@@ -4,38 +4,41 @@ using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
-    public static GameManager Instance; // Singleton reference for easy access from Coin script
+    public static GameManager Instance; // Singleton reference
 
     [Header("References")]
-    public Transform player;                 // Drag your Player (car)
-    public TextMeshProUGUI scoreText;        // Drag your ScoreText (TMP)
-    public TextMeshProUGUI timerText;        // Drag your TimerText (TMP)
-    public TextMeshProUGUI gameOverText;     // Drag your GameOverText (TMP)
-    public TextMeshProUGUI winText;          // Drag your WinText (TMP)
-    public GameObject restartButton;         // Drag your RestartButton (UI Button)
-    public GameObject coinPrefab;            // 🪙 Drag your coin prefab here in the Inspector
+    public Transform player;                 
+    public TextMeshProUGUI scoreText;        
+    public TextMeshProUGUI timerText;        
+    public TextMeshProUGUI gameOverText;     
+    public TextMeshProUGUI winText;          
+    public GameObject restartButton;         
+    public GameObject coinPrefab;            
 
     [Header("Settings")]
-    public float finishZ = 385f;             // Adjust to match end of track
+    public float finishZ = 385f;             
 
     [Header("Coin Spawn Settings")]
-    public float spawnInterval = 2f;         // Seconds between coin spawns
-    public int coinsPerBatch = 3;            // Coins per batch
-    public float spawnDistanceAhead = 40f;   // Distance ahead of player
-    public float coinY = 1.5f;               // Coin height above road
-    public float coinXRange = 3f;            // Left-right range for coins
+    public float spawnInterval = 2f;         
+    public int coinsPerBatch = 3;            
+    public float spawnDistanceAhead = 40f;   
+    public float coinY = 1.5f;               
+    public float coinXRange = 3f;            
+
+    [Header("Difficulty Settings")]
+    public float baseSpeedMultiplier = 1f;
+    public float spawnIntervalMultiplier = 1f;
 
     private bool isGameOver = false;
     private bool hasWon = false;
     private float startZ;
-    private float timer = 0f;                // Timer variable
-    private int distanceScore = 0;           // Based on travel
-    private int coinScore = 0;               // Based on coins collected
-    private float nextSpawnTime = 0f;        // Timer to control coin spawn rate
+    private float timer = 0f;
+    private int distanceScore = 0;
+    private int coinScore = 0;
+    private float nextSpawnTime = 0f;
 
     void Awake()
     {
-        // Ensure singleton
         if (Instance == null)
             Instance = this;
         else
@@ -44,7 +47,6 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
-        // Initialize UI
         if (scoreText != null) scoreText.text = "Score: 0";
         if (timerText != null) timerText.text = "Time: 0.0s";
         if (gameOverText != null) gameOverText.text = "";
@@ -63,42 +65,61 @@ public class GameManager : MonoBehaviour
         timer = 0f;
         nextSpawnTime = Time.time + spawnInterval;
 
-        Debug.Log("GameManager started. Timer initialized.");
+        // 🔥 Apply difficulty scaling
+        int levelIndex = SceneManager.GetActiveScene().buildIndex;
+        if (levelIndex == 1) // Level 2
+        {
+            baseSpeedMultiplier = 1.2f;
+            spawnIntervalMultiplier = 0.9f;
+        }
+        else if (levelIndex == 2) // Level 3
+        {
+            baseSpeedMultiplier = 1.4f;
+            spawnIntervalMultiplier = 0.8f;
+        }
+
+        spawnInterval *= spawnIntervalMultiplier;
+
+        // ✅ Adjust player speed/turn parameters safely
+        PlayerController pc = player.GetComponent<PlayerController>();
+        if (pc != null)
+        {
+            pc.baseSpeed *= baseSpeedMultiplier;
+            pc.maxSpeed *= baseSpeedMultiplier;
+            pc.turnSpeed *= baseSpeedMultiplier;
+        }
+
+        Debug.Log($"GameManager started at Level {levelIndex}. Difficulty applied.");
     }
 
     void Update()
     {
-        if (player == null) return;
-        if (isGameOver || hasWon) return;
+        if (player == null || isGameOver || hasWon) return;
 
-        // ⏱️ Update timer
+        // Timer
         timer += Time.deltaTime;
         if (timerText != null)
             timerText.text = "Time: " + timer.ToString("F1") + "s";
 
-        // 📈 Update score based on distance moved
+        // Distance-based score
         float distance = player.position.z - startZ;
         distanceScore = Mathf.FloorToInt(distance);
         UpdateScoreUI();
 
-        // 🪙 Spawn coins automatically
+        // Coin spawn
         if (Time.time >= nextSpawnTime && player.position.z < finishZ)
         {
             SpawnCoinsAhead();
             nextSpawnTime = Time.time + spawnInterval;
         }
 
-        // 💀 Game Over check
+        // Game Over check
         if (player.position.y < -5)
-        {
             GameOver();
-        }
 
-        // 🎯 Win check
+        // Win check
         if (player.position.z >= finishZ)
-        {
             Win();
-        }
     }
 
     void SpawnCoinsAhead()
@@ -110,7 +131,6 @@ public class GameManager : MonoBehaviour
             float randomX = Random.Range(-coinXRange, coinXRange);
             float randomZ = player.position.z + Random.Range(10f, spawnDistanceAhead);
             Vector3 spawnPos = new Vector3(randomX, coinY, randomZ);
-
             Instantiate(coinPrefab, spawnPos, Quaternion.identity);
         }
     }
@@ -145,7 +165,7 @@ public class GameManager : MonoBehaviour
         if (pc != null)
             pc.canMove = false;
 
-        Debug.Log("Game over triggered at " + timer.ToString("F1") + " seconds.");
+        Debug.Log($"Game over triggered at {timer:F1} seconds.");
     }
 
     void Win()
@@ -156,30 +176,26 @@ public class GameManager : MonoBehaviour
         if (winText != null)
         {
             winText.enabled = true;
-            winText.text = "YOU WIN!\nTime: " + timer.ToString("F1") + "s";
+            winText.text = $"YOU WIN!\nTime: {timer:F1}s";
         }
-
-        if (restartButton != null)
-            restartButton.SetActive(true);
 
         PlayerController pc = player.GetComponent<PlayerController>();
         if (pc != null)
             pc.canMove = false;
 
-        Debug.Log("YOU WIN! Finished in " + timer.ToString("F1") + " seconds.");
+        Debug.Log($"YOU WIN! Finished in {timer:F1} seconds.");
 
-        // ✅ Automatically load next level if it exists
-        int nextSceneIndex = SceneManager.GetActiveScene().buildIndex + 1;
-        if (nextSceneIndex < SceneManager.sceneCountInBuildSettings)
-        {
-            Invoke("LoadNextLevel", 2f); // Wait 2 seconds before next level
-        }
+        Invoke(nameof(LoadNextLevel), 2.5f);
     }
 
     void LoadNextLevel()
     {
         int nextSceneIndex = SceneManager.GetActiveScene().buildIndex + 1;
-        SceneManager.LoadScene(nextSceneIndex);
+
+        if (nextSceneIndex < SceneManager.sceneCountInBuildSettings)
+            SceneManager.LoadScene(nextSceneIndex);
+        else
+            Debug.Log("🎉 All levels completed!");
     }
 
     public void RestartGame()
