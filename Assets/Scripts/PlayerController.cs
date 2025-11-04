@@ -4,10 +4,15 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     private Rigidbody rb;
-    private float speed = 10f;
-    private float turnSpeed = 50f;
     private float horizontalInput;
     private float forwardInput;
+
+    [Header("Movement Settings")]
+    public float baseSpeed = 10f;               // Starting speed
+    public float speedIncreaseRate = 0.3f;      // How fast speed increases over time
+    public float maxSpeed = 25f;                // Maximum forward speed
+    public float turnSpeed = 50f;
+    private float currentSpeed;
 
     public bool canMove = true;
 
@@ -21,6 +26,8 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 
+        currentSpeed = baseSpeed;
+
         playerAudio = GetComponent<AudioSource>();
         if (playerAudio == null)
             playerAudio = gameObject.AddComponent<AudioSource>();
@@ -33,7 +40,7 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    void FixedUpdate() // 🔥 use FixedUpdate for physics movement
+    void FixedUpdate() // ✅ Physics-based movement
     {
         if (!canMove)
         {
@@ -42,19 +49,25 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
+        // 🏎️ Gradually increase speed over time
+        currentSpeed += speedIncreaseRate * Time.fixedDeltaTime;
+        currentSpeed = Mathf.Clamp(currentSpeed, baseSpeed, maxSpeed);
+
         horizontalInput = Input.GetAxis("Horizontal");
         forwardInput = Input.GetAxis("Vertical");
 
-        // Move forward/backward using Rigidbody
-        Vector3 move = transform.forward * speed * forwardInput * Time.fixedDeltaTime;
+        // Move forward automatically OR with player input
+        float effectiveSpeed = currentSpeed * Mathf.Max(0.2f, forwardInput); // slight slowdown if not pressing forward
+        Vector3 move = transform.forward * effectiveSpeed * Time.fixedDeltaTime;
         rb.MovePosition(rb.position + move);
 
-        // Rotate smoothly
+        // Rotate car
         Quaternion turn = Quaternion.Euler(0, horizontalInput * turnSpeed * Time.fixedDeltaTime, 0);
         rb.MoveRotation(rb.rotation * turn);
 
+        // 🎵 Adjust engine pitch with speed
         if (playerAudio.clip == engineSound)
-            playerAudio.pitch = 1f + Mathf.Abs(forwardInput) * 0.5f;
+            playerAudio.pitch = 1f + (currentSpeed / maxSpeed) * 0.5f;
     }
 
     void OnCollisionEnter(Collision collision)
