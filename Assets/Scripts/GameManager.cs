@@ -15,6 +15,13 @@ public class GameManager : MonoBehaviour
     [Header("Settings")]
     public float finishZ = 185f;             // Adjust to match end of track
 
+    [Header("Endless Road Settings")]
+    public GameObject roadPrefab;            // Drag your road prefab here
+    public float roadLength = 40f;           // Adjust based on your road’s Z length
+    private float nextSpawnZ = 0f;
+    private Transform lastRoad;
+    private Transform environmentParent;     // For organizing spawned roads
+
     private bool isGameOver = false;
     private bool hasWon = false;
     private float startZ;
@@ -41,6 +48,29 @@ public class GameManager : MonoBehaviour
         timer = 0f;
 
         Debug.Log("GameManager started. Timer initialized.");
+
+        // Try to find the Environment parent (optional)
+        GameObject envObj = GameObject.Find("Environment");
+        if (envObj != null)
+        {
+            environmentParent = envObj.transform;
+        }
+        else
+        {
+            Debug.LogWarning("No 'Environment' GameObject found. Roads will spawn at root level.");
+        }
+
+        // Setup for endless road
+        if (roadPrefab != null)
+        {
+            // Find the first road in the scene (via RoadManager)
+            RoadManager existingRoad = FindObjectOfType<RoadManager>();
+            if (existingRoad != null)
+            {
+                lastRoad = existingRoad.transform;
+                nextSpawnZ = lastRoad.position.z + roadLength;
+            }
+        }
     }
 
     void Update()
@@ -64,11 +94,38 @@ public class GameManager : MonoBehaviour
             GameOver();
         }
 
-        //  Win check (player crosses finish line)
+        // 🛣️ Endless Road Spawning
+        if (player.position.z + 20f > nextSpawnZ)
+        {
+            SpawnNextRoad();
+        }
+
+        // 🎯 Win check (player crosses finish line)
         if (player.position.z >= finishZ)
         {
             Win();
         }
+    }
+
+    void SpawnNextRoad()
+    {
+        if (roadPrefab == null) return;
+
+        // Spawn new road in front of the last one
+        Vector3 spawnPos = new Vector3(0, 0, nextSpawnZ);
+        Quaternion spawnRot = Quaternion.Euler(0, 90, 0); // Keep rotation as (-0, 90, 0)
+
+        GameObject newRoad = Instantiate(roadPrefab, spawnPos, spawnRot);
+
+        // ✅ Parent under Environment (if found)
+        if (environmentParent != null)
+        {
+            newRoad.transform.SetParent(environmentParent);
+        }
+
+        nextSpawnZ += roadLength;
+
+        Debug.Log("Spawned new road at Z = " + spawnPos.z);
     }
 
     void GameOver()
