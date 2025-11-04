@@ -2,20 +2,31 @@ using UnityEngine;
 
 public class Coin : MonoBehaviour
 {
-    public int value = 10;
+    public int coinValue = 10;
+    public GameObject pickupEffect; // Assign CoinPickupEffect prefab here
+    public AudioClip pickupSound;   // Assign sound clip here
 
-    private void OnTriggerEnter(Collider other)
+    void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Player"))
         {
-            GameManager.Instance.AddCoinScore(value);
+            // Add to score
+            GameManager.Instance.AddCoinScore(coinValue);
+
+            // ✨ Spawn pickup particle effect
+            if (pickupEffect != null)
+            {
+                Instantiate(pickupEffect, transform.position, Quaternion.identity);
+            }
+
+            // 🔊 Play sound at coin position
+            if (pickupSound != null)
+            {
+                AudioSource.PlayClipAtPoint(pickupSound, transform.position);
+            }
+
+            // Destroy coin object
             Destroy(gameObject);
         }
-    }
-
-    void Update()
-    {
-        // Optional spin effect
-        transform.Rotate(0, 90 * Time.deltaTime, 0);
     }
 }
