@@ -1,27 +1,30 @@
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody))]
 public class PlayerController : MonoBehaviour
 {
-    private float speed = 5f;
-    private float turnSpeed = 25f;
+    private Rigidbody rb;
+    private float speed = 10f;
+    private float turnSpeed = 50f;
     private float horizontalInput;
     private float forwardInput;
 
-    public bool canMove = true; // Controlled by GameManager (stops after win or game over)
+    public bool canMove = true;
 
     [Header("Sound Settings")]
-    public AudioClip engineSound;  // Looping engine clip
-    public AudioClip crashSound;   // Crash clip
+    public AudioClip engineSound;
+    public AudioClip crashSound;
     private AudioSource playerAudio;
 
     void Start()
     {
-        // Get or add AudioSource
+        rb = GetComponent<Rigidbody>();
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
         playerAudio = GetComponent<AudioSource>();
         if (playerAudio == null)
             playerAudio = gameObject.AddComponent<AudioSource>();
 
-        // Start looping engine sound
         if (engineSound != null)
         {
             playerAudio.clip = engineSound;
@@ -30,11 +33,10 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    void Update()
+    void FixedUpdate() // 🔥 use FixedUpdate for physics movement
     {
         if (!canMove)
         {
-            // Stop engine loop when player can’t move
             if (playerAudio.isPlaying && playerAudio.clip == engineSound)
                 playerAudio.Pause();
             return;
@@ -43,33 +45,31 @@ public class PlayerController : MonoBehaviour
         horizontalInput = Input.GetAxis("Horizontal");
         forwardInput = Input.GetAxis("Vertical");
 
-        // Move and rotate
-        transform.Translate(Vector3.forward * Time.deltaTime * speed * forwardInput);
-        transform.Rotate(Vector3.up, turnSpeed * horizontalInput * Time.deltaTime);
+        // Move forward/backward using Rigidbody
+        Vector3 move = transform.forward * speed * forwardInput * Time.fixedDeltaTime;
+        rb.MovePosition(rb.position + move);
 
-        // Adjust engine pitch (optional realism)
+        // Rotate smoothly
+        Quaternion turn = Quaternion.Euler(0, horizontalInput * turnSpeed * Time.fixedDeltaTime, 0);
+        rb.MoveRotation(rb.rotation * turn);
+
         if (playerAudio.clip == engineSound)
             playerAudio.pitch = 1f + Mathf.Abs(forwardInput) * 0.5f;
     }
 
     void OnCollisionEnter(Collision collision)
     {
-        // Handle collision with obstacles
         if (collision.gameObject.CompareTag("Obstacle"))
         {
             Debug.Log("Player hit an obstacle! Game Over triggered.");
-
             canMove = false;
 
-            // Stop engine loop
             if (playerAudio.clip == engineSound)
                 playerAudio.Stop();
 
-            // Play crash sound once
             if (crashSound != null)
                 playerAudio.PlayOneShot(crashSound, 1.0f);
 
-            // Notify GameManager
             FindObjectOfType<GameManager>().SendMessage("GameOver");
         }
     }
