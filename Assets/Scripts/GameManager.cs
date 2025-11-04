@@ -65,7 +65,7 @@ public class GameManager : MonoBehaviour
         timer = 0f;
         nextSpawnTime = Time.time + spawnInterval;
 
-        // 🔥 Apply difficulty scaling
+        // difficulty scaling
         int levelIndex = SceneManager.GetActiveScene().buildIndex;
         if (levelIndex == 1) // Level 2
         {
@@ -80,7 +80,7 @@ public class GameManager : MonoBehaviour
 
         spawnInterval *= spawnIntervalMultiplier;
 
-        // ✅ Adjust player speed/turn parameters safely
+        //Adjust player speed/turn parameters safely
         PlayerController pc = player.GetComponent<PlayerController>();
         if (pc != null)
         {
@@ -195,7 +195,7 @@ public class GameManager : MonoBehaviour
         if (nextSceneIndex < SceneManager.sceneCountInBuildSettings)
             SceneManager.LoadScene(nextSceneIndex);
         else
-            Debug.Log("🎉 All levels completed!");
+            Debug.Log("All levels completed!");
     }
 
     public void RestartGame()

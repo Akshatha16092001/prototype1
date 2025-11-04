@@ -19,7 +19,7 @@ public class Coin : MonoBehaviour
                 Instantiate(pickupEffect, transform.position, Quaternion.identity);
             }
 
-            // 🔊 Play sound at coin position
+            //  Play sound at coin position
             if (pickupSound != null)
             {
                 AudioSource.PlayClipAtPoint(pickupSound, transform.position);
