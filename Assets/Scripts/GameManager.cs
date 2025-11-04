@@ -13,7 +13,7 @@ public class GameManager : MonoBehaviour
     public GameObject restartButton;         // Drag your RestartButton (UI Button)
 
     [Header("Settings")]
-    public float finishZ = 185f;             // Adjust to match end of track
+    public float finishZ = 385f;             // Adjust to match end of track
 
     private bool isGameOver = false;
     private bool hasWon = false;
