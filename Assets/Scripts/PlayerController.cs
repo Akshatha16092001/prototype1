@@ -22,11 +22,14 @@ public class PlayerController : MonoBehaviour
     public AudioClip crashSound;
     private AudioSource playerAudio;
 
+    private float fixedY; // Keeps car on road
+
     void Start()
     {
         rb = GetComponent<Rigidbody>();
         rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 
+        fixedY = rb.position.y; // Store starting Y position
         currentSpeed = baseSpeed;
 
         playerAudio = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
@@ -43,32 +46,61 @@ public class PlayerController : MonoBehaviour
     {
         if (!canMove)
         {
-            if (playerAudio.isPlaying && playerAudio.clip == engineSound)
-                playerAudio.Pause();
+            rb.velocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
             return;
         }
 
+        // ------------------------
+        // INPUT
+        // ------------------------
+        if (MobileInput.horizontal != 0f || MobileInput.vertical != 0f)
+        {
+            horizontalInput = MobileInput.horizontal;
+            forwardInput = MobileInput.vertical;
+        }
+        else
+        {
+            horizontalInput = Input.GetAxis("Horizontal");
+            forwardInput = Input.GetAxis("Vertical");
+        }
+
+        // ------------------------
+        // SPEED
+        // ------------------------
         currentSpeed += speedIncreaseRate * Time.fixedDeltaTime;
         currentSpeed = Mathf.Clamp(currentSpeed, baseSpeed, maxSpeed);
 
-        horizontalInput = Input.GetAxis("Horizontal");
-        forwardInput = Input.GetAxis("Vertical");
+        // ------------------------
+        // FORWARD MOVEMENT (physics-based)
+        // ------------------------
+        Vector3 forwardMove = transform.forward * currentSpeed * Mathf.Max(0.2f, forwardInput);
+        Vector3 newVelocity = new Vector3(forwardMove.x, rb.velocity.y, forwardMove.z); // keep physics y (gravity/collision)
+        rb.velocity = newVelocity;
 
-        float effectiveSpeed = currentSpeed * Mathf.Max(0.2f, forwardInput);
-        Vector3 move = transform.forward * effectiveSpeed * Time.fixedDeltaTime;
-        rb.MovePosition(rb.position + move);
+        // ------------------------
+        // TURNING
+        // ------------------------
+        if (Mathf.Abs(horizontalInput) > 0.1f)
+        {
+            float turnAngle = horizontalInput * turnSpeed * Time.fixedDeltaTime;
+            rb.MoveRotation(rb.rotation * Quaternion.Euler(0, turnAngle, 0));
+        }
 
-        Quaternion turn = Quaternion.Euler(0, horizontalInput * turnSpeed * Time.fixedDeltaTime, 0);
-        rb.MoveRotation(rb.rotation * turn);
-
-        if (playerAudio.clip == engineSound)
-            playerAudio.pitch = 1f + (currentSpeed / maxSpeed) * 0.5f;
-
+        // ------------------------
+        // DUST TRAIL
+        // ------------------------
         if (dustTrail != null)
         {
             var emission = dustTrail.emission;
             emission.enabled = Mathf.Abs(forwardInput) > 0.1f;
         }
+
+        // ------------------------
+        // ENGINE SOUND
+        // ------------------------
+        if (playerAudio.clip == engineSound)
+            playerAudio.pitch = 1f + (currentSpeed / maxSpeed) * 0.5f;
     }
 
     void OnCollisionEnter(Collision collision)
@@ -77,12 +109,19 @@ public class PlayerController : MonoBehaviour
         {
             canMove = false;
 
+            // Stop Rigidbody completely
+            rb.velocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.constraints = RigidbodyConstraints.FreezeAll;
+
+            // Stop engine sound and play crash sound
             if (playerAudio.clip == engineSound)
                 playerAudio.Stop();
 
             if (crashSound != null)
                 playerAudio.PlayOneShot(crashSound);
 
+            // Trigger Game Over
             FindObjectOfType<GameManager>().SendMessage("GameOver");
         }
     }

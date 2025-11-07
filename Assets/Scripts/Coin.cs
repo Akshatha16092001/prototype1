@@ -13,7 +13,7 @@ public class Coin : MonoBehaviour
             // Add to score
             GameManager.Instance.AddCoinScore(coinValue);
 
-            // ✨ Spawn pickup particle effect
+            //  Spawn pickup particle effect
             if (pickupEffect != null)
             {
                 Instantiate(pickupEffect, transform.position, Quaternion.identity);
