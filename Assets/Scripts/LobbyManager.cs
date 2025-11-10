@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
-using System;
+using System; // For DateTime
 
 public class LobbyManager : MonoBehaviour
 {
@@ -9,26 +9,36 @@ public class LobbyManager : MonoBehaviour
     public string gameSceneName = "Level1"; // Your gameplay scene name
 
     [Header("UI References")]
-    public TextMeshProUGUI coinText;        // Top-left coin display
-    public GameObject entryFeePopup;        // Popup panel (disabled by default)
-    public TextMeshProUGUI popupMessage;    // Text inside popup
-    public TextMeshProUGUI yesText;         // TextMeshPro for "Yes"
-    public TextMeshProUGUI noText;          // TextMeshPro for "No"
-    public TextMeshProUGUI addCoinsText;    // TextMeshPro for "+" button
-    public TextMeshProUGUI autoCoinTimerText; // Timer for auto coin fill
+    public TextMeshProUGUI coinText;        
+    public GameObject entryFeePopup;        
+    public TextMeshProUGUI popupMessage;    
+    public TextMeshProUGUI yesText;         
+    public TextMeshProUGUI noText;          
+    public TextMeshProUGUI addCoinsText;    
+    public TextMeshProUGUI dailyRewardText; // Daily reward TMP text
 
     [Header("Economy Settings")]
     public int entryFee = 100;
-    public int startingCoins = 500;
-    public int autoCoinsPerHour = 100;
 
     private int totalCoins = 0;
-    private DateTime lastCoinTime;
-    private TimeSpan timeUntilNextCoin;
+
+    // === DAILY LOGIN SYSTEM ===
+    private int[] dailyRewards = { 100, 200, 300, 300, 300, 300 };
+    private int currentDayIndex = 0;
+    private DateTime lastLoginDate;
+    private bool rewardClaimedToday = false;
 
     void Start()
     {
-        LoadCoins();
+        // Load coins
+        totalCoins = PlayerPrefs.GetInt("TotalCoins", 0);
+        if (totalCoins == 0)
+        {
+            totalCoins = 500;
+            PlayerPrefs.SetInt("TotalCoins", totalCoins);
+            PlayerPrefs.Save();
+        }
+
         UpdateCoinUI();
 
         if (entryFeePopup != null)
@@ -37,20 +47,20 @@ public class LobbyManager : MonoBehaviour
         if (addCoinsText != null)
             addCoinsText.gameObject.SetActive(false);
 
-        // Load last coin time
-        if (PlayerPrefs.HasKey("LastCoinTime"))
-            DateTime.TryParse(PlayerPrefs.GetString("LastCoinTime"), out lastCoinTime);
+        // Load daily reward data
+        if (PlayerPrefs.HasKey("LastLoginDate"))
+            lastLoginDate = DateTime.Parse(PlayerPrefs.GetString("LastLoginDate"));
         else
-        {
-            lastCoinTime = DateTime.Now;
-            PlayerPrefs.SetString("LastCoinTime", lastCoinTime.ToString());
-            PlayerPrefs.Save();
-        }
+            lastLoginDate = DateTime.MinValue;
+
+        currentDayIndex = PlayerPrefs.GetInt("LoginDayIndex", 0);
+
+        CheckDailyReward();
     }
 
     void Update()
     {
-        // Detect mouse click on TMP "buttons"
+        // Detect mouse clicks on TMP texts
         if (Input.GetMouseButtonDown(0))
         {
             if (IsTextClicked(yesText))
@@ -59,26 +69,68 @@ public class LobbyManager : MonoBehaviour
                 OnNoClicked();
             else if (IsTextClicked(addCoinsText))
                 AddDummyCoins();
+            else if (IsTextClicked(dailyRewardText))
+                ClaimDailyReward();
         }
-
-        UpdateAutoCoinTimerUI();
     }
 
-    void LoadCoins()
+    // === DAILY LOGIN CHECK ===
+    void CheckDailyReward()
     {
-        if (PlayerPrefs.HasKey("TotalCoins"))
+        DateTime today = DateTime.Now.Date;
+
+        if (lastLoginDate.Date < today)
         {
-            totalCoins = PlayerPrefs.GetInt("TotalCoins", 0);
+            // New day — reward available
+            rewardClaimedToday = false;
+
+            int reward = dailyRewards[currentDayIndex];
+            if (dailyRewardText != null)
+            {
+                dailyRewardText.gameObject.SetActive(true);
+                dailyRewardText.text = $"🎁 Daily Reward: {reward} Coins (Tap to claim)";
+            }
         }
         else
         {
-            totalCoins = startingCoins;
-            PlayerPrefs.SetInt("TotalCoins", totalCoins);
-            PlayerPrefs.Save();
+            // Already claimed today
+            rewardClaimedToday = true;
+            if (dailyRewardText != null)
+            {
+                dailyRewardText.gameObject.SetActive(true);
+                dailyRewardText.text = $"✅ Reward already claimed today!";
+            }
         }
     }
 
-    // Called when Play button pressed
+    // === CLAIM DAILY REWARD ===
+    void ClaimDailyReward()
+    {
+        if (rewardClaimedToday) return;
+
+        int reward = dailyRewards[currentDayIndex];
+        totalCoins += reward;
+        UpdateCoinUI();
+
+        // Save new coin total
+        PlayerPrefs.SetInt("TotalCoins", totalCoins);
+
+        // Update login data
+        lastLoginDate = DateTime.Now.Date;
+        PlayerPrefs.SetString("LastLoginDate", lastLoginDate.ToString());
+
+        currentDayIndex++;
+        if (currentDayIndex >= dailyRewards.Length)
+            currentDayIndex = dailyRewards.Length - 1; // stay at last reward
+        PlayerPrefs.SetInt("LoginDayIndex", currentDayIndex);
+        PlayerPrefs.Save();
+
+        rewardClaimedToday = true;
+        if (dailyRewardText != null)
+            dailyRewardText.text = $"🎉 Claimed {reward} Coins!";
+    }
+
+    // === PLAY LOGIC ===
     public void PlayGame()
     {
         if (totalCoins >= entryFee)
@@ -132,7 +184,7 @@ public class LobbyManager : MonoBehaviour
 
     public void AddDummyCoins()
     {
-        totalCoins += 1000; // Add dummy coins
+        totalCoins += 1000;
         PlayerPrefs.SetInt("TotalCoins", totalCoins);
         PlayerPrefs.Save();
         UpdateCoinUI();
@@ -154,32 +206,5 @@ public class LobbyManager : MonoBehaviour
         RectTransform rect = tmp.GetComponent<RectTransform>();
         Vector2 localMousePos = rect.InverseTransformPoint(Input.mousePosition);
         return rect.rect.Contains(localMousePos);
-    }
-
-    // --- Auto Coin Fill Logic ---
-    void UpdateAutoCoinTimerUI()
-    {
-        if (autoCoinTimerText == null) return;
-
-        TimeSpan timePassed = DateTime.Now - lastCoinTime;
-        timeUntilNextCoin = TimeSpan.FromHours(1) - timePassed;
-
-        if (timeUntilNextCoin.TotalSeconds <= 0)
-        {
-            // Add coins automatically
-            totalCoins += autoCoinsPerHour;
-            PlayerPrefs.SetInt("TotalCoins", totalCoins);
-
-            // Reset last coin time
-            lastCoinTime = DateTime.Now;
-            PlayerPrefs.SetString("LastCoinTime", lastCoinTime.ToString());
-            PlayerPrefs.Save();
-
-            UpdateCoinUI();
-
-            timeUntilNextCoin = TimeSpan.FromHours(1);
-        }
-
-        autoCoinTimerText.text = $"Next +{autoCoinsPerHour} Coins in {timeUntilNextCoin.Hours:D2}:{timeUntilNextCoin.Minutes:D2}:{timeUntilNextCoin.Seconds:D2}";
     }
 }
