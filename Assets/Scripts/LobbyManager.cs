@@ -111,7 +111,7 @@ public class LobbyManager : MonoBehaviour
             if (dailyRewardText != null)
             {
                 dailyRewardText.gameObject.SetActive(true);
-                dailyRewardText.text = $" Reward already claimed today!";
+                dailyRewardText.text = $"Reward already claimed today!";
             }
         }
     }
@@ -136,7 +136,7 @@ public class LobbyManager : MonoBehaviour
 
         rewardClaimedToday = true;
         if (dailyRewardText != null)
-            dailyRewardText.text = $"🎉 Claimed {reward} Coins!";
+            dailyRewardText.text = $"Claimed {reward} Coins!";
     }
 
     // === PLAY LOGIC ===
