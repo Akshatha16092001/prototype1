@@ -5,7 +5,7 @@ public class PauseManager : MonoBehaviour
 {
     [Header("UI References")]
     public GameObject pausePanel; // Assign or auto-find at runtime
-    public GameObject mobileControls; // 🔹 Assign your MobileControlsCanvas here
+    public GameObject mobileControls; // Assign your MobileControlsCanvas here
 
     private bool isPaused = false;
 
@@ -51,7 +51,7 @@ public class PauseManager : MonoBehaviour
             pausePanel.SetActive(true);
 
         if (mobileControls != null)
-            mobileControls.SetActive(false); // 🔹 Hide buttons when paused
+            mobileControls.SetActive(false); // Hide buttons when paused
     }
 
     // Resume gameplay and hide menu
@@ -65,7 +65,7 @@ public class PauseManager : MonoBehaviour
             pausePanel.SetActive(false);
 
         if (mobileControls != null)
-            mobileControls.SetActive(true); // 🔹 Show buttons again
+            mobileControls.SetActive(true); // Show buttons again
     }
 
     // Quit to lobby
