@@ -80,7 +80,7 @@ public class GameManager : MonoBehaviour
 
         spawnInterval *= spawnIntervalMultiplier;
 
-        //Adjust player speed/turn parameters safely
+        // Adjust player speed safely
         PlayerController pc = player.GetComponent<PlayerController>();
         if (pc != null)
         {
@@ -173,17 +173,24 @@ public class GameManager : MonoBehaviour
         if (hasWon) return;
         hasWon = true;
 
+        // ✅ Reward coins when player wins
+        int reward = 200;
+        int totalCoins = PlayerPrefs.GetInt("TotalCoins", 0);
+        totalCoins += reward;
+        PlayerPrefs.SetInt("TotalCoins", totalCoins);
+        PlayerPrefs.Save();
+
         if (winText != null)
         {
             winText.enabled = true;
-            winText.text = $"YOU WIN!\nTime: {timer:F1}s";
+            winText.text = $"YOU WIN!\nTime: {timer:F1}s\n+{reward} Coins!";
         }
 
         PlayerController pc = player.GetComponent<PlayerController>();
         if (pc != null)
             pc.canMove = false;
 
-        Debug.Log($"YOU WIN! Finished in {timer:F1} seconds.");
+        Debug.Log($"YOU WIN! Finished in {timer:F1} seconds. Reward: {reward} coins added.");
 
         Invoke(nameof(LoadNextLevel), 2.5f);
     }
