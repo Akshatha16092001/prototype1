@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
-using UnityEngine.EventSystems;
+using System;
 
 public class LobbyManager : MonoBehaviour
 {
@@ -15,34 +15,37 @@ public class LobbyManager : MonoBehaviour
     public TextMeshProUGUI yesText;         // TextMeshPro for "Yes"
     public TextMeshProUGUI noText;          // TextMeshPro for "No"
     public TextMeshProUGUI addCoinsText;    // TextMeshPro for "+" button
+    public TextMeshProUGUI autoCoinTimerText; // Timer for auto coin fill
 
     [Header("Economy Settings")]
     public int entryFee = 100;
+    public int startingCoins = 500;
+    public int autoCoinsPerHour = 100;
 
     private int totalCoins = 0;
+    private DateTime lastCoinTime;
+    private TimeSpan timeUntilNextCoin;
 
     void Start()
     {
-        // Load coins from PlayerPrefs (don't reset if zero)
-        if (PlayerPrefs.HasKey("TotalCoins"))
-        {
-            totalCoins = PlayerPrefs.GetInt("TotalCoins", 0);
-        }
-        else
-        {
-            // First-time players start with 500 coins
-            totalCoins = 500;
-            PlayerPrefs.SetInt("TotalCoins", totalCoins);
-            PlayerPrefs.Save();
-        }
-
+        LoadCoins();
         UpdateCoinUI();
 
         if (entryFeePopup != null)
             entryFeePopup.SetActive(false);
 
         if (addCoinsText != null)
-            addCoinsText.gameObject.SetActive(false); // hide "+" at start
+            addCoinsText.gameObject.SetActive(false);
+
+        // Load last coin time
+        if (PlayerPrefs.HasKey("LastCoinTime"))
+            DateTime.TryParse(PlayerPrefs.GetString("LastCoinTime"), out lastCoinTime);
+        else
+        {
+            lastCoinTime = DateTime.Now;
+            PlayerPrefs.SetString("LastCoinTime", lastCoinTime.ToString());
+            PlayerPrefs.Save();
+        }
     }
 
     void Update()
@@ -56,6 +59,22 @@ public class LobbyManager : MonoBehaviour
                 OnNoClicked();
             else if (IsTextClicked(addCoinsText))
                 AddDummyCoins();
+        }
+
+        UpdateAutoCoinTimerUI();
+    }
+
+    void LoadCoins()
+    {
+        if (PlayerPrefs.HasKey("TotalCoins"))
+        {
+            totalCoins = PlayerPrefs.GetInt("TotalCoins", 0);
+        }
+        else
+        {
+            totalCoins = startingCoins;
+            PlayerPrefs.SetInt("TotalCoins", totalCoins);
+            PlayerPrefs.Save();
         }
     }
 
@@ -95,7 +114,6 @@ public class LobbyManager : MonoBehaviour
             if (entryFeePopup != null)
                 entryFeePopup.SetActive(false);
 
-            // Load next scene
             SceneManager.LoadScene(gameSceneName);
         }
         else
@@ -136,5 +154,32 @@ public class LobbyManager : MonoBehaviour
         RectTransform rect = tmp.GetComponent<RectTransform>();
         Vector2 localMousePos = rect.InverseTransformPoint(Input.mousePosition);
         return rect.rect.Contains(localMousePos);
+    }
+
+    // --- Auto Coin Fill Logic ---
+    void UpdateAutoCoinTimerUI()
+    {
+        if (autoCoinTimerText == null) return;
+
+        TimeSpan timePassed = DateTime.Now - lastCoinTime;
+        timeUntilNextCoin = TimeSpan.FromHours(1) - timePassed;
+
+        if (timeUntilNextCoin.TotalSeconds <= 0)
+        {
+            // Add coins automatically
+            totalCoins += autoCoinsPerHour;
+            PlayerPrefs.SetInt("TotalCoins", totalCoins);
+
+            // Reset last coin time
+            lastCoinTime = DateTime.Now;
+            PlayerPrefs.SetString("LastCoinTime", lastCoinTime.ToString());
+            PlayerPrefs.Save();
+
+            UpdateCoinUI();
+
+            timeUntilNextCoin = TimeSpan.FromHours(1);
+        }
+
+        autoCoinTimerText.text = $"Next +{autoCoinsPerHour} Coins in {timeUntilNextCoin.Hours:D2}:{timeUntilNextCoin.Minutes:D2}:{timeUntilNextCoin.Seconds:D2}";
     }
 }

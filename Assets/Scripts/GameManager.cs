@@ -17,6 +17,8 @@ public class GameManager : MonoBehaviour
 
     [Header("Settings")]
     public float finishZ = 385f;             
+    public int maxAttempts = 3;              // Total attempts
+    private int remainingAttempts;
 
     [Header("Coin Spawn Settings")]
     public float spawnInterval = 2f;         
@@ -37,6 +39,8 @@ public class GameManager : MonoBehaviour
     private int coinScore = 0;
     private float nextSpawnTime = 0f;
 
+    private bool isFalling = false; // Prevent multiple triggers per fall
+
     void Awake()
     {
         if (Instance == null)
@@ -47,6 +51,8 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
+        remainingAttempts = maxAttempts;
+
         if (scoreText != null) scoreText.text = "Score: 0";
         if (timerText != null) timerText.text = "Time: 0.0s";
         if (gameOverText != null) gameOverText.text = "";
@@ -89,7 +95,7 @@ public class GameManager : MonoBehaviour
             pc.turnSpeed *= baseSpeedMultiplier;
         }
 
-        Debug.Log($"GameManager started at Level {levelIndex}. Difficulty applied.");
+        Debug.Log($"GameManager started at Level {levelIndex}. Difficulty applied. Attempts: {remainingAttempts}");
     }
 
     void Update()
@@ -113,9 +119,16 @@ public class GameManager : MonoBehaviour
             nextSpawnTime = Time.time + spawnInterval;
         }
 
-        // Game Over check
-        if (player.position.y < -5)
-            GameOver();
+        // Fall check for attempts
+        if (player.position.y < -5 && !isFalling)
+        {
+            isFalling = true;
+            HandleAttempt();
+        }
+        else if (player.position.y >= -5)
+        {
+            isFalling = false;
+        }
 
         // Win check
         if (player.position.z >= finishZ)
@@ -147,6 +160,25 @@ public class GameManager : MonoBehaviour
         UpdateScoreUI();
     }
 
+    void HandleAttempt()
+    {
+        remainingAttempts--;
+        Debug.Log($"Player fell! Remaining Attempts: {remainingAttempts}");
+
+        if (remainingAttempts > 0)
+        {
+            // Reset player position to start
+            player.position = new Vector3(0, 1, startZ);
+            PlayerController pc = player.GetComponent<PlayerController>();
+            if (pc != null)
+                pc.canMove = true;
+        }
+        else
+        {
+            GameOver();
+        }
+    }
+
     void GameOver()
     {
         if (isGameOver) return;
@@ -173,7 +205,7 @@ public class GameManager : MonoBehaviour
         if (hasWon) return;
         hasWon = true;
 
-        // ✅ Reward coins when player wins
+        // Reward coins for winning
         int reward = 200;
         int totalCoins = PlayerPrefs.GetInt("TotalCoins", 0);
         totalCoins += reward;
