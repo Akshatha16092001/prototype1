@@ -114,7 +114,7 @@ public class LobbyManager : MonoBehaviour
 
     public void AddDummyCoins()
     {
-        totalCoins += 200; // Add dummy coins
+        totalCoins += 1000; // Add dummy coins
         PlayerPrefs.SetInt("TotalCoins", totalCoins);
         PlayerPrefs.Save();
         UpdateCoinUI();
