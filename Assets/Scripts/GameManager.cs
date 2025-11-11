@@ -1,31 +1,32 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.SceneManagement;
+using System.Collections;
 
 public class GameManager : MonoBehaviour
 {
-    public static GameManager Instance; // Singleton reference
+    public static GameManager Instance;
 
     [Header("References")]
-    public Transform player;                 
-    public TextMeshProUGUI scoreText;        
-    public TextMeshProUGUI timerText;        
-    public TextMeshProUGUI gameOverText;     
-    public TextMeshProUGUI winText;          
-    public GameObject restartButton;         
-    public GameObject coinPrefab;            
+    public Transform player;
+    public TextMeshProUGUI scoreText;
+    public TextMeshProUGUI timerText;
+    public TextMeshProUGUI gameOverText;
+    public TextMeshProUGUI winText;
+    public GameObject restartButton;
+    public GameObject coinPrefab;
 
     [Header("Settings")]
-    public float finishZ = 385f;             
-    public int maxAttempts = 3;              // Total attempts
-    private int remainingAttempts;
+    public float finishZ = 385f;
+    public int maxAttempts = 3;
+    [HideInInspector] public int remainingAttempts;
 
     [Header("Coin Spawn Settings")]
-    public float spawnInterval = 2f;         
-    public int coinsPerBatch = 3;            
-    public float spawnDistanceAhead = 40f;   
-    public float coinY = 1.5f;               
-    public float coinXRange = 3f;            
+    public float spawnInterval = 2f;
+    public int coinsPerBatch = 3;
+    public float spawnDistanceAhead = 40f;
+    public float coinY = 1.5f;
+    public float coinXRange = 3f;
 
     [Header("Difficulty Settings")]
     public float baseSpeedMultiplier = 1f;
@@ -71,7 +72,7 @@ public class GameManager : MonoBehaviour
         timer = 0f;
         nextSpawnTime = Time.time + spawnInterval;
 
-        // difficulty scaling
+        // Difficulty scaling
         int levelIndex = SceneManager.GetActiveScene().buildIndex;
         if (levelIndex == 1) // Level 2
         {
@@ -95,7 +96,7 @@ public class GameManager : MonoBehaviour
             pc.turnSpeed *= baseSpeedMultiplier;
         }
 
-        Debug.Log($"GameManager started at Level {levelIndex}. Difficulty applied. Attempts: {remainingAttempts}");
+        Debug.Log($"GameManager started. Attempts: {remainingAttempts}");
     }
 
     void Update()
@@ -160,18 +161,19 @@ public class GameManager : MonoBehaviour
         UpdateScoreUI();
     }
 
+    // ================================
+    // Attempt & Respawn System
+    // ================================
     void HandleAttempt()
     {
+        if (isGameOver) return;
+
         remainingAttempts--;
         Debug.Log($"Player fell! Remaining Attempts: {remainingAttempts}");
 
         if (remainingAttempts > 0)
         {
-            // Reset player position to start
-            player.position = new Vector3(0, 1, startZ);
-            PlayerController pc = player.GetComponent<PlayerController>();
-            if (pc != null)
-                pc.canMove = true;
+            StartCoroutine(RespawnRoutine());
         }
         else
         {
@@ -179,7 +181,31 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void GameOver()
+    IEnumerator RespawnRoutine()
+    {
+        PlayerController pc = player.GetComponent<PlayerController>();
+        if (pc != null)
+            pc.canMove = false;
+
+        yield return new WaitForSeconds(1.0f); // small delay before respawn
+        RespawnPlayer();
+    }
+
+    void RespawnPlayer()
+    {
+        if (isGameOver) return; // safety check
+
+        PlayerController pc = player.GetComponent<PlayerController>();
+        if (pc != null)
+            pc.ResetToStart();
+
+        Debug.Log("✅ Player respawned successfully.");
+    }
+
+    // ================================
+    // Win / Lose System
+    // ================================
+    public void GameOver()
     {
         if (isGameOver) return;
         isGameOver = true;
@@ -205,7 +231,6 @@ public class GameManager : MonoBehaviour
         if (hasWon) return;
         hasWon = true;
 
-        // Reward coins for winning
         int reward = 200;
         int totalCoins = PlayerPrefs.GetInt("TotalCoins", 0);
         totalCoins += reward;

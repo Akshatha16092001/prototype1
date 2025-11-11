@@ -22,15 +22,17 @@ public class PlayerController : MonoBehaviour
     public AudioClip crashSound;
     private AudioSource playerAudio;
 
-    private float fixedY; // Keeps car on road
+    private Vector3 startPosition;
+    private Quaternion startRotation;
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
         rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 
-        fixedY = rb.position.y; // Store starting Y position
         currentSpeed = baseSpeed;
+        startPosition = transform.position;
+        startRotation = transform.rotation;
 
         playerAudio = GetComponent<AudioSource>() ?? gameObject.AddComponent<AudioSource>();
 
@@ -72,10 +74,10 @@ public class PlayerController : MonoBehaviour
         currentSpeed = Mathf.Clamp(currentSpeed, baseSpeed, maxSpeed);
 
         // ------------------------
-        // FORWARD MOVEMENT (physics-based)
+        // MOVEMENT
         // ------------------------
         Vector3 forwardMove = transform.forward * currentSpeed * Mathf.Max(0.2f, forwardInput);
-        Vector3 newVelocity = new Vector3(forwardMove.x, rb.velocity.y, forwardMove.z); // keep physics y (gravity/collision)
+        Vector3 newVelocity = new Vector3(forwardMove.x, rb.velocity.y, forwardMove.z);
         rb.velocity = newVelocity;
 
         // ------------------------
@@ -108,21 +110,47 @@ public class PlayerController : MonoBehaviour
         if (collision.gameObject.CompareTag("Obstacle"))
         {
             canMove = false;
-
-            // Stop Rigidbody completely
             rb.velocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
             rb.constraints = RigidbodyConstraints.FreezeAll;
 
-            // Stop engine sound and play crash sound
             if (playerAudio.clip == engineSound)
                 playerAudio.Stop();
 
             if (crashSound != null)
                 playerAudio.PlayOneShot(crashSound);
 
-            // Trigger Game Over
-            FindObjectOfType<GameManager>().SendMessage("GameOver");
+            FindObjectOfType<GameManager>().GameOver();
+        }
+    }
+
+    // =========================================================
+    // RESET & RESPAWN LOGIC
+    // =========================================================
+    public void ResetToStart()
+    {
+        transform.position = startPosition;
+        transform.rotation = startRotation;
+
+        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+        rb.velocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
+        canMove = true;
+        currentSpeed = baseSpeed;
+
+        if (engineSound != null && playerAudio != null)
+        {
+            playerAudio.clip = engineSound;
+            playerAudio.loop = true;
+            if (!playerAudio.isPlaying)
+                playerAudio.Play();
+        }
+
+        if (dustTrail != null)
+        {
+            var emission = dustTrail.emission;
+            emission.enabled = false;
         }
     }
 }
