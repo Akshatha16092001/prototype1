@@ -36,7 +36,7 @@ public class LobbyManager : MonoBehaviour
 
     void Start()
     {
-        // ✅ Initialize coins only on first launch
+        // Initialize coins only on first launch
         if (!PlayerPrefs.HasKey("HasStartedBefore"))
         {
             totalCoins = 500;

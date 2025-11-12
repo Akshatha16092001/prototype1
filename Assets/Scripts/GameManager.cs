@@ -24,7 +24,7 @@ public class GameManager : MonoBehaviour
     [Header("Coin Spawn Settings")]
     public float spawnInterval = 2f;
     public int coinsPerBatch = 3;
-    public float spawnDistanceAhead = 40f;
+    public float spawnDistanceAhead = 40f; 
     public float coinY = 1.5f;
     public float coinXRange = 3f;
 
