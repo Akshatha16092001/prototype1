@@ -2,6 +2,8 @@ using UnityEngine;
 using TMPro;
 using UnityEngine.SceneManagement;
 using System.Collections;
+using System;
+using System.IO;
 
 public class GameManager : MonoBehaviour
 {
@@ -24,7 +26,7 @@ public class GameManager : MonoBehaviour
     [Header("Coin Spawn Settings")]
     public float spawnInterval = 2f;
     public int coinsPerBatch = 3;
-    public float spawnDistanceAhead = 40f; 
+    public float spawnDistanceAhead = 40f;
     public float coinY = 1.5f;
     public float coinXRange = 3f;
 
@@ -39,8 +41,8 @@ public class GameManager : MonoBehaviour
     private int distanceScore = 0;
     private int coinScore = 0;
     private float nextSpawnTime = 0f;
-
-    private bool isFalling = false; // Prevent multiple triggers per fall
+    private bool isFalling = false;
+    private string saveFilePath;
 
     void Awake()
     {
@@ -72,14 +74,13 @@ public class GameManager : MonoBehaviour
         timer = 0f;
         nextSpawnTime = Time.time + spawnInterval;
 
-        // Difficulty scaling
         int levelIndex = SceneManager.GetActiveScene().buildIndex;
-        if (levelIndex == 1) // Level 2
+        if (levelIndex == 1)
         {
             baseSpeedMultiplier = 1.2f;
             spawnIntervalMultiplier = 0.9f;
         }
-        else if (levelIndex == 2) // Level 3
+        else if (levelIndex == 2)
         {
             baseSpeedMultiplier = 1.4f;
             spawnIntervalMultiplier = 0.8f;
@@ -87,7 +88,6 @@ public class GameManager : MonoBehaviour
 
         spawnInterval *= spawnIntervalMultiplier;
 
-        // Adjust player speed safely
         PlayerController pc = player.GetComponent<PlayerController>();
         if (pc != null)
         {
@@ -96,31 +96,28 @@ public class GameManager : MonoBehaviour
             pc.turnSpeed *= baseSpeedMultiplier;
         }
 
-        Debug.Log($"GameManager started. Attempts: {remainingAttempts}");
+        saveFilePath = Path.Combine(Application.persistentDataPath, "saveData.json");
+        Debug.Log("GameManager started. Save path: " + saveFilePath);
     }
 
     void Update()
     {
         if (player == null || isGameOver || hasWon) return;
 
-        // Timer
         timer += Time.deltaTime;
         if (timerText != null)
             timerText.text = "Time: " + timer.ToString("F1") + "s";
 
-        // Distance-based score
         float distance = player.position.z - startZ;
         distanceScore = Mathf.FloorToInt(distance);
         UpdateScoreUI();
 
-        // Coin spawn
         if (Time.time >= nextSpawnTime && player.position.z < finishZ)
         {
             SpawnCoinsAhead();
             nextSpawnTime = Time.time + spawnInterval;
         }
 
-        // Fall check for attempts
         if (player.position.y < -5 && !isFalling)
         {
             isFalling = true;
@@ -131,7 +128,6 @@ public class GameManager : MonoBehaviour
             isFalling = false;
         }
 
-        // Win check
         if (player.position.z >= finishZ)
             Win();
     }
@@ -142,8 +138,8 @@ public class GameManager : MonoBehaviour
 
         for (int i = 0; i < coinsPerBatch; i++)
         {
-            float randomX = Random.Range(-coinXRange, coinXRange);
-            float randomZ = player.position.z + Random.Range(10f, spawnDistanceAhead);
+            float randomX = UnityEngine.Random.Range(-coinXRange, coinXRange);
+            float randomZ = player.position.z + UnityEngine.Random.Range(10f, spawnDistanceAhead);
             Vector3 spawnPos = new Vector3(randomX, coinY, randomZ);
             Instantiate(coinPrefab, spawnPos, Quaternion.identity);
         }
@@ -152,7 +148,7 @@ public class GameManager : MonoBehaviour
     void UpdateScoreUI()
     {
         if (scoreText != null)
-            scoreText.text = "Score: " + (distanceScore + coinScore).ToString();
+            scoreText.text = "Score: " + (distanceScore + coinScore);
     }
 
     public void AddCoinScore(int amount)
@@ -161,15 +157,12 @@ public class GameManager : MonoBehaviour
         UpdateScoreUI();
     }
 
-    // ================================
-    // Attempt & Respawn System
-    // ================================
     void HandleAttempt()
     {
         if (isGameOver) return;
 
         remainingAttempts--;
-        Debug.Log($"Player fell! Remaining Attempts: {remainingAttempts}");
+        Debug.Log("Player fell! Remaining Attempts: " + remainingAttempts);
 
         if (remainingAttempts > 0)
         {
@@ -187,24 +180,21 @@ public class GameManager : MonoBehaviour
         if (pc != null)
             pc.canMove = false;
 
-        yield return new WaitForSeconds(1.0f); // small delay before respawn
+        yield return new WaitForSeconds(1.0f);
         RespawnPlayer();
     }
 
     void RespawnPlayer()
     {
-        if (isGameOver) return; // safety check
+        if (isGameOver) return;
 
         PlayerController pc = player.GetComponent<PlayerController>();
         if (pc != null)
             pc.ResetToStart();
 
-        Debug.Log("✅ Player respawned successfully.");
+        Debug.Log("Player respawned successfully.");
     }
 
-    // ================================
-    // Win / Lose System
-    // ================================
     public void GameOver()
     {
         if (isGameOver) return;
@@ -223,7 +213,7 @@ public class GameManager : MonoBehaviour
         if (pc != null)
             pc.canMove = false;
 
-        Debug.Log($"Game over triggered at {timer:F1} seconds.");
+        Debug.Log("Game over triggered at " + timer.ToString("F1") + " seconds.");
     }
 
     void Win()
@@ -232,24 +222,49 @@ public class GameManager : MonoBehaviour
         hasWon = true;
 
         int reward = 200;
-        int totalCoins = PlayerPrefs.GetInt("TotalCoins", 0);
-        totalCoins += reward;
-        PlayerPrefs.SetInt("TotalCoins", totalCoins);
-        PlayerPrefs.Save();
+        AddRewardToSaveFile(reward);
 
         if (winText != null)
         {
             winText.enabled = true;
-            winText.text = $"YOU WIN!\nTime: {timer:F1}s\n+{reward} Coins!";
+            winText.text = "YOU WIN!\nTime: " + timer.ToString("F1") + "s\n+" + reward + " Coins!";
         }
 
         PlayerController pc = player.GetComponent<PlayerController>();
         if (pc != null)
             pc.canMove = false;
 
-        Debug.Log($"YOU WIN! Finished in {timer:F1} seconds. Reward: {reward} coins added.");
+        Debug.Log("YOU WIN! Finished in " + timer.ToString("F1") + " seconds. +" + reward + " coins added.");
 
         Invoke(nameof(LoadNextLevel), 2.5f);
+    }
+
+    void AddRewardToSaveFile(int reward)
+    {
+        try
+        {
+            if (File.Exists(saveFilePath))
+            {
+                string json = File.ReadAllText(saveFilePath);
+                SaveData data = JsonUtility.FromJson<SaveData>(json);
+                data.totalCoins += reward;
+
+                string updatedJson = JsonUtility.ToJson(data, true);
+                File.WriteAllText(saveFilePath, updatedJson);
+                Debug.Log("Added " + reward + " coins to save file.");
+
+                PlayerPrefs.SetInt("CoinsEarned", reward);
+                PlayerPrefs.Save();
+            }
+            else
+            {
+                Debug.LogWarning("Save file not found. Reward not saved.");
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Error updating save file: " + e.Message);
+        }
     }
 
     void LoadNextLevel()

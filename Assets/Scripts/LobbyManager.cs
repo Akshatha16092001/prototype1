@@ -1,16 +1,17 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
+using UnityEngine.UI;
 using System;
 using System.IO;
 
 [Serializable]
 public class SaveData
 {
-    public int totalCoins;
-    public double nextRefillTimeUTC;
-    public string lastLoginDate;
-    public int currentDayIndex;
+    public int totalCoins = 500;
+    public string lastLoginDate = "";
+    public int currentDayIndex = 0;
+    public string nextRefillTimeUTC = "";
 }
 
 public class LobbyManager : MonoBehaviour
@@ -22,82 +23,84 @@ public class LobbyManager : MonoBehaviour
     public TextMeshProUGUI coinText;
     public GameObject entryFeePopup;
     public TextMeshProUGUI popupMessage;
-    public TextMeshProUGUI yesText;
-    public TextMeshProUGUI noText;
+    public Button yesButton;
+    public Button noButton;
     public TextMeshProUGUI addCoinsText;
     public TextMeshProUGUI dailyRewardText;
     public TextMeshProUGUI coinTimerText;
+    public Button playButton;
 
     [Header("Economy Settings")]
     public int entryFee = 100;
 
-    [Header("Auto Coin Fill Settings")]
+    [Header("Auto Refill Settings")]
     public int autoCoinsPerHour = 100;
-    private float refillInterval = 3600f; // 1 hour
-    private double nextRefillTimeUTC;
+    private float refillInterval = 3600f; // 1 hour in seconds
 
     private int totalCoins = 0;
-
-    // === DAILY LOGIN SYSTEM ===
     private int[] dailyRewards = { 100, 200, 300, 300, 300, 300 };
     private int currentDayIndex = 0;
+    private DateTime nextRefillTimeUTC;
     private DateTime lastLoginDate;
     private bool rewardClaimedToday = false;
-
-    // === SAVE FILE PATH ===
+    private bool hasPaidEntry = false;
     private string saveFilePath;
+
+    void Awake()
+    {
+        saveFilePath = Path.Combine(Application.persistentDataPath, "saveData.json");
+        Debug.Log("Save file path: " + saveFilePath);
+    }
 
     void Start()
     {
-        saveFilePath = Path.Combine(Application.persistentDataPath, "saveData.json");
-        Debug.Log($"Save file path: {saveFilePath}");
-
-        LoadDataFromFile();
-
+        LoadData();
         UpdateCoinUI();
-        if (entryFeePopup != null) entryFeePopup.SetActive(false);
-        if (addCoinsText != null) addCoinsText.gameObject.SetActive(false);
+
+        yesButton.onClick.AddListener(OnYesClicked);
+        noButton.onClick.AddListener(OnNoClicked);
+        playButton.onClick.AddListener(PlayGame);
+
+        entryFeePopup.SetActive(false);
+        addCoinsText.gameObject.SetActive(false);
 
         CheckDailyReward();
+        SaveDataFile();
     }
 
     void Update()
     {
+        UpdateRefillTimer();
+
         if (Input.GetMouseButtonDown(0))
         {
-            if (IsTextClicked(yesText)) OnYesClicked();
-            else if (IsTextClicked(noText)) OnNoClicked();
-            else if (IsTextClicked(addCoinsText)) AddDummyCoins();
-            else if (IsTextClicked(dailyRewardText)) ClaimDailyReward();
-        }
+            if (IsTextClicked(dailyRewardText))
+                ClaimDailyReward();
 
-        UpdateAutoCoinTimer();
+            if (IsTextClicked(addCoinsText))
+                AddDummyCoins();
+        }
     }
 
-    // === DAILY REWARD ===
+    // ===================== DAILY REWARD =====================
     void CheckDailyReward()
     {
         DateTime today = DateTime.Now.Date;
 
+        // Reward can only be claimed if a new real day has started
         if (lastLoginDate.Date < today)
         {
             rewardClaimedToday = false;
             int reward = dailyRewards[currentDayIndex];
-            if (dailyRewardText != null)
-            {
-                dailyRewardText.gameObject.SetActive(true);
-                dailyRewardText.text = $"Daily Reward: {reward} Coins (Tap to claim)";
-            }
+            dailyRewardText.text = $"Daily Reward: {reward} Coins (Tap to claim)";
         }
         else
         {
             rewardClaimedToday = true;
-            if (dailyRewardText != null)
-            {
-                dailyRewardText.gameObject.SetActive(true);
-                dailyRewardText.text = $"Reward already claimed today!";
-            }
+            dailyRewardText.text = "Reward already claimed today!";
         }
+
+        dailyRewardText.gameObject.SetActive(true);
     }
 
     void ClaimDailyReward()
@@ -106,185 +109,176 @@ public class LobbyManager : MonoBehaviour
 
         int reward = dailyRewards[currentDayIndex];
         totalCoins += reward;
-        UpdateCoinUI();
-
+        rewardClaimedToday = true;
         lastLoginDate = DateTime.Now.Date;
+
         currentDayIndex++;
         if (currentDayIndex >= dailyRewards.Length)
-            currentDayIndex = dailyRewards.Length - 1;
+            currentDayIndex = 0;
 
-        rewardClaimedToday = true;
-        if (dailyRewardText != null)
-            dailyRewardText.text = $"Claimed {reward} Coins!";
+        dailyRewardText.text = $"Claimed {reward} Coins!";
+        UpdateCoinUI();
+        SaveDataFile();
 
-        SaveDataToFile();
+        Debug.Log($"Daily reward claimed: {reward} coins.");
     }
 
-    // === PLAY LOGIC ===
+    // ===================== PLAY BUTTON =====================
     public void PlayGame()
     {
+        if (entryFeePopup.activeSelf) return;
+
         if (totalCoins >= entryFee)
         {
-            ShowPopup($"Pay {entryFee} coins to start the game?");
+            popupMessage.text = $"Pay {entryFee} coins to start the game?";
         }
         else
         {
-            ShowPopup("Not enough coins! Please add more.");
-            if (addCoinsText != null) addCoinsText.gameObject.SetActive(true);
+            popupMessage.text = "Not enough coins!";
+            addCoinsText.gameObject.SetActive(true);
         }
-    }
 
-    void ShowPopup(string message)
-    {
-        if (popupMessage != null) popupMessage.text = message;
-        if (entryFeePopup != null) entryFeePopup.SetActive(true);
+        entryFeePopup.SetActive(true);
     }
 
     public void OnYesClicked()
     {
-        if (totalCoins >= entryFee)
-        {
-            totalCoins -= entryFee;
-            SaveDataToFile();
-            UpdateCoinUI();
+        if (hasPaidEntry) return;
 
-            if (entryFeePopup != null) entryFeePopup.SetActive(false);
-            SceneManager.LoadScene(gameSceneName);
-        }
-        else
+        if (totalCoins < entryFee)
         {
-            ShowPopup("Not enough coins! Please add more.");
-            if (addCoinsText != null) addCoinsText.gameObject.SetActive(true);
+            popupMessage.text = "Not enough coins!";
+            return;
         }
+
+        //  Deduct exactly 100 coins
+        totalCoins -= entryFee;
+        hasPaidEntry = true;
+
+        UpdateCoinUI();
+        SaveDataFile();
+
+        entryFeePopup.SetActive(false);
+        SceneManager.LoadScene(gameSceneName);
     }
 
     public void OnNoClicked()
     {
-        if (entryFeePopup != null) entryFeePopup.SetActive(false);
+        entryFeePopup.SetActive(false);
+        hasPaidEntry = false;
     }
 
-    public void AddDummyCoins()
+    // ===================== COINS =====================
+    void AddDummyCoins()
     {
         totalCoins += 1000;
-        SaveDataToFile();
+        addCoinsText.gameObject.SetActive(false);
         UpdateCoinUI();
-
-        if (addCoinsText != null) addCoinsText.gameObject.SetActive(false);
+        SaveDataFile();
     }
 
     void UpdateCoinUI()
     {
         if (coinText != null)
-            coinText.text = "Coins: " + totalCoins;
+            coinText.text = $"Coins: {totalCoins}";
     }
 
-    // === AUTO COIN FILL ===
-    void UpdateAutoCoinTimer()
+    // ===================== AUTO REFILL (Fixed Local Time Countdown) =====================
+    void UpdateRefillTimer()
     {
-        double currentUTC = (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
-        double remaining = nextRefillTimeUTC - currentUTC;
+        DateTime now = DateTime.Now; // local time
+        DateTime nextRefillLocal = nextRefillTimeUTC.ToLocalTime(); // convert UTC to local for display
 
-        if (remaining <= 0)
+        // Check refill time
+        if (nextRefillTimeUTC == default || now >= nextRefillLocal)
         {
-            AddCoinsAutomatically();
-            nextRefillTimeUTC = currentUTC + refillInterval;
-            SaveDataToFile();
-            remaining = refillInterval;
+            totalCoins += autoCoinsPerHour;
+            nextRefillTimeUTC = DateTime.UtcNow.AddHours(1); // store in UTC for consistency
+            SaveDataFile();
+            UpdateCoinUI();
+            nextRefillLocal = nextRefillTimeUTC.ToLocalTime();
         }
+
+        // Calculate remaining countdown
+        TimeSpan remaining = nextRefillLocal - now;
+        if (remaining.TotalSeconds < 0)
+            remaining = TimeSpan.Zero;
 
         if (coinTimerText != null)
         {
-            remaining = Math.Max(remaining, 0);
-            int hours = (int)(remaining / 3600);
-            int minutes = (int)((remaining % 3600) / 60);
-            int seconds = (int)(remaining % 60);
-            coinTimerText.text = $"Next coins in: {hours:D2}:{minutes:D2}:{seconds:D2}";
+            int h = remaining.Hours;
+            int m = remaining.Minutes;
+            int s = remaining.Seconds;
+            coinTimerText.text = $"Next refill in: {h:D2}:{m:D2}:{s:D2}";
         }
     }
 
-    void AddCoinsAutomatically()
+    // ===================== SAVE / LOAD =====================
+    void SaveDataFile()
     {
-        totalCoins += autoCoinsPerHour;
-        SaveDataToFile();
-        UpdateCoinUI();
-    }
-
-    // === FILE SAVE/LOAD SYSTEM ===
-    void SaveDataToFile()
-    {
-        SaveData data = new SaveData()
+        SaveData data = new SaveData
         {
             totalCoins = totalCoins,
-            nextRefillTimeUTC = nextRefillTimeUTC,
-            lastLoginDate = lastLoginDate.ToString("o"), // ISO 8601 format
-            currentDayIndex = currentDayIndex
+            lastLoginDate = lastLoginDate.ToString("yyyy-MM-dd"),
+            currentDayIndex = currentDayIndex,
+            nextRefillTimeUTC = nextRefillTimeUTC.ToString("o")
         };
 
         string json = JsonUtility.ToJson(data, true);
+        File.WriteAllText(saveFilePath, json);
+        Debug.Log("Save file updated: " + json);
+    }
+
+    void LoadData()
+    {
+        if (!File.Exists(saveFilePath))
+        {
+            ResetDefaults();
+            return;
+        }
 
         try
         {
-            File.WriteAllText(saveFilePath, json);
-            Debug.Log($"Save file written to: {saveFilePath}");
+            string json = File.ReadAllText(saveFilePath);
+            SaveData data = JsonUtility.FromJson<SaveData>(json);
+
+            totalCoins = data.totalCoins;
+            currentDayIndex = data.currentDayIndex;
+            DateTime.TryParse(data.lastLoginDate, out lastLoginDate);
+            DateTime.TryParse(data.nextRefillTimeUTC, out nextRefillTimeUTC);
+
+            if (nextRefillTimeUTC == default)
+                nextRefillTimeUTC = DateTime.UtcNow.AddSeconds(refillInterval);
+
+            Debug.Log("Save file loaded successfully.");
         }
-        catch (Exception e)
+        catch (Exception ex)
         {
-            Debug.LogError($" Failed to save data: {e.Message}");
+            Debug.LogError("Failed to load save data: " + ex.Message);
+            ResetDefaults();
         }
     }
 
-    void LoadDataFromFile()
-    {
-        if (File.Exists(saveFilePath))
-        {
-            try
-            {
-                string json = File.ReadAllText(saveFilePath);
-                SaveData data = JsonUtility.FromJson<SaveData>(json);
-
-                totalCoins = data.totalCoins;
-                nextRefillTimeUTC = data.nextRefillTimeUTC;
-                currentDayIndex = data.currentDayIndex;
-
-                if (!string.IsNullOrEmpty(data.lastLoginDate))
-                {
-                    lastLoginDate = DateTime.Parse(data.lastLoginDate, null,
-                        System.Globalization.DateTimeStyles.RoundtripKind);
-                }
-                else
-                {
-                    lastLoginDate = DateTime.MinValue;
-                }
-
-                Debug.Log("Save file loaded successfully.");
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($" Failed to load data: {e.Message}");
-                ResetDefaultData();
-            }
-        }
-        else
-        {
-            Debug.Log("No save file found. Creating new data.");
-            ResetDefaultData();
-        }
-    }
-
-    void ResetDefaultData()
+    void ResetDefaults()
     {
         totalCoins = 500;
-        nextRefillTimeUTC = (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds + refillInterval;
-        lastLoginDate = DateTime.MinValue;
         currentDayIndex = 0;
-        SaveDataToFile();
+        lastLoginDate = DateTime.MinValue;
+        nextRefillTimeUTC = DateTime.UtcNow.AddHours(1);
+        SaveDataFile();
     }
+    public void QuitGame()
+{
+    Application.Quit();
+}
 
+
+    // ===================== HELPER =====================
     bool IsTextClicked(TextMeshProUGUI tmp)
     {
         if (tmp == null) return false;
         RectTransform rect = tmp.GetComponent<RectTransform>();
-        Vector2 localMousePos = rect.InverseTransformPoint(Input.mousePosition);
-        return rect.rect.Contains(localMousePos);
+        Vector2 localPos = rect.InverseTransformPoint(Input.mousePosition);
+        return rect.rect.Contains(localPos);
     }
 }

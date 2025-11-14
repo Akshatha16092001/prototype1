@@ -22,6 +22,7 @@ public class PlayerController : MonoBehaviour
     public AudioClip crashSound;
     private AudioSource playerAudio;
 
+    // Store start transform for respawn
     private Vector3 startPosition;
     private Quaternion startRotation;
 
@@ -120,7 +121,10 @@ public class PlayerController : MonoBehaviour
             if (crashSound != null)
                 playerAudio.PlayOneShot(crashSound);
 
-            FindObjectOfType<GameManager>().GameOver();
+            // Notify GameManager safely
+            GameManager gm = FindObjectOfType<GameManager>();
+            if (gm != null)
+                gm.GameOver();
         }
     }
 
@@ -129,28 +133,38 @@ public class PlayerController : MonoBehaviour
     // =========================================================
     public void ResetToStart()
     {
-        transform.position = startPosition;
-        transform.rotation = startRotation;
-
+        // Unfreeze everything before repositioning
+        rb.constraints = RigidbodyConstraints.None;
         rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+        // Stop all motion
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
-        canMove = true;
-        currentSpeed = baseSpeed;
+        // Reset position and rotation
+        transform.position = startPosition + Vector3.up * 0.5f; // slightly above ground to avoid clipping
+        transform.rotation = startRotation;
 
-        if (engineSound != null && playerAudio != null)
+        // Reset speed and allow movement again
+        currentSpeed = baseSpeed;
+        canMove = true;
+
+        // Restart engine sound
+        if (playerAudio != null && engineSound != null)
         {
+            playerAudio.Stop();
             playerAudio.clip = engineSound;
             playerAudio.loop = true;
-            if (!playerAudio.isPlaying)
-                playerAudio.Play();
+            playerAudio.Play();
         }
 
+        // Reset dust trail
         if (dustTrail != null)
         {
             var emission = dustTrail.emission;
             emission.enabled = false;
         }
+
+        Debug.Log("Player successfully reset to start position.");
     }
 }
