@@ -74,7 +74,7 @@ public class LobbyManager : MonoBehaviour
         SaveDataFile();
     }
 
-    void OnDestroy()
+    void OnDestroy()//destroy
     {
         popupTween?.Kill();
         coinTween?.Kill();
