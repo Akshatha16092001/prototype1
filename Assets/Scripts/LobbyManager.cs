@@ -4,6 +4,7 @@ using TMPro;
 using UnityEngine.UI;
 using System;
 using System.IO;
+using DG.Tweening;
 
 [Serializable]
 public class SaveData
@@ -35,7 +36,7 @@ public class LobbyManager : MonoBehaviour
 
     [Header("Auto Refill Settings")]
     public int autoCoinsPerHour = 100;
-    private float refillInterval = 3600f; // 1 hour in seconds
+    private float refillInterval = 3600f;
 
     private int totalCoins = 0;
     private int[] dailyRewards = { 100, 200, 300, 300, 300, 300 };
@@ -45,6 +46,11 @@ public class LobbyManager : MonoBehaviour
     private bool rewardClaimedToday = false;
     private bool hasPaidEntry = false;
     private string saveFilePath;
+
+    // Tween references
+    private Tween popupTween;
+    private Tween coinTween;
+    private Tween dailyTween;
 
     void Awake()
     {
@@ -68,17 +74,21 @@ public class LobbyManager : MonoBehaviour
         SaveDataFile();
     }
 
+    void OnDestroy()
+    {
+        popupTween?.Kill();
+        coinTween?.Kill();
+        dailyTween?.Kill();
+    }
+
     void Update()
     {
         UpdateRefillTimer();
 
         if (Input.GetMouseButtonDown(0))
         {
-            if (IsTextClicked(dailyRewardText))
-                ClaimDailyReward();
-
-            if (IsTextClicked(addCoinsText))
-                AddDummyCoins();
+            if (IsTextClicked(dailyRewardText)) ClaimDailyReward();
+            if (IsTextClicked(addCoinsText)) AddDummyCoins();
         }
     }
 
@@ -87,12 +97,12 @@ public class LobbyManager : MonoBehaviour
     {
         DateTime today = DateTime.Now.Date;
 
-        // Reward can only be claimed if a new real day has started
         if (lastLoginDate.Date < today)
         {
             rewardClaimedToday = false;
             int reward = dailyRewards[currentDayIndex];
             dailyRewardText.text = $"Daily Reward: {reward} Coins (Tap to claim)";
+            AnimateDailyReward();
         }
         else
         {
@@ -113,14 +123,15 @@ public class LobbyManager : MonoBehaviour
         lastLoginDate = DateTime.Now.Date;
 
         currentDayIndex++;
-        if (currentDayIndex >= dailyRewards.Length)
-            currentDayIndex = 0;
+        if (currentDayIndex >= dailyRewards.Length) currentDayIndex = 0;
 
         dailyRewardText.text = $"Claimed {reward} Coins!";
         UpdateCoinUI();
         SaveDataFile();
 
         Debug.Log($"Daily reward claimed: {reward} coins.");
+
+        AnimateCoinText();
     }
 
     // ===================== PLAY BUTTON =====================
@@ -136,9 +147,11 @@ public class LobbyManager : MonoBehaviour
         {
             popupMessage.text = "Not enough coins!";
             addCoinsText.gameObject.SetActive(true);
+            AnimateAddCoins();
         }
 
         entryFeePopup.SetActive(true);
+        AnimatePopupOpen();
     }
 
     public void OnYesClicked()
@@ -151,21 +164,22 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
-        //  Deduct exactly 100 coins
         totalCoins -= entryFee;
         hasPaidEntry = true;
 
         UpdateCoinUI();
         SaveDataFile();
 
-        entryFeePopup.SetActive(false);
-        SceneManager.LoadScene(gameSceneName);
+        AnimatePopupClose(() =>
+        {
+            SceneManager.LoadScene(gameSceneName);
+        });
     }
 
     public void OnNoClicked()
     {
-        entryFeePopup.SetActive(false);
         hasPaidEntry = false;
+        AnimatePopupClose(null);
     }
 
     // ===================== COINS =====================
@@ -175,6 +189,7 @@ public class LobbyManager : MonoBehaviour
         addCoinsText.gameObject.SetActive(false);
         UpdateCoinUI();
         SaveDataFile();
+        AnimateCoinText();
     }
 
     void UpdateCoinUI()
@@ -183,34 +198,26 @@ public class LobbyManager : MonoBehaviour
             coinText.text = $"Coins: {totalCoins}";
     }
 
-    // ===================== AUTO REFILL (Fixed Local Time Countdown) =====================
+    // ===================== AUTO REFILL =====================
     void UpdateRefillTimer()
     {
-        DateTime now = DateTime.Now; // local time
-        DateTime nextRefillLocal = nextRefillTimeUTC.ToLocalTime(); // convert UTC to local for display
+        DateTime now = DateTime.Now;
+        DateTime nextLocal = nextRefillTimeUTC.ToLocalTime();
 
-        // Check refill time
-        if (nextRefillTimeUTC == default || now >= nextRefillLocal)
+        if (nextRefillTimeUTC == default || now >= nextLocal)
         {
             totalCoins += autoCoinsPerHour;
-            nextRefillTimeUTC = DateTime.UtcNow.AddHours(1); // store in UTC for consistency
+            nextRefillTimeUTC = DateTime.UtcNow.AddHours(1);
             SaveDataFile();
             UpdateCoinUI();
-            nextRefillLocal = nextRefillTimeUTC.ToLocalTime();
+            AnimateCoinText();
+            nextLocal = nextRefillTimeUTC.ToLocalTime();
         }
 
-        // Calculate remaining countdown
-        TimeSpan remaining = nextRefillLocal - now;
-        if (remaining.TotalSeconds < 0)
-            remaining = TimeSpan.Zero;
+        TimeSpan remaining = nextLocal - now;
+        if (remaining.TotalSeconds < 0) remaining = TimeSpan.Zero;
 
-        if (coinTimerText != null)
-        {
-            int h = remaining.Hours;
-            int m = remaining.Minutes;
-            int s = remaining.Seconds;
-            coinTimerText.text = $"Next refill in: {h:D2}:{m:D2}:{s:D2}";
-        }
+        coinTimerText.text = $"Next refill in: {remaining.Hours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
     }
 
     // ===================== SAVE / LOAD =====================
@@ -226,7 +233,6 @@ public class LobbyManager : MonoBehaviour
 
         string json = JsonUtility.ToJson(data, true);
         File.WriteAllText(saveFilePath, json);
-        Debug.Log("Save file updated: " + json);
     }
 
     void LoadData()
@@ -249,12 +255,9 @@ public class LobbyManager : MonoBehaviour
 
             if (nextRefillTimeUTC == default)
                 nextRefillTimeUTC = DateTime.UtcNow.AddSeconds(refillInterval);
-
-            Debug.Log("Save file loaded successfully.");
         }
-        catch (Exception ex)
+        catch
         {
-            Debug.LogError("Failed to load save data: " + ex.Message);
             ResetDefaults();
         }
     }
@@ -267,13 +270,63 @@ public class LobbyManager : MonoBehaviour
         nextRefillTimeUTC = DateTime.UtcNow.AddHours(1);
         SaveDataFile();
     }
+
     public void QuitGame()
-{
-    Application.Quit();
-}
+    {
+        Application.Quit();
+    }
 
+    // ===================== DOTWEEN ANIMATIONS =====================
+    void AnimatePopupOpen()
+    {
+        RectTransform rt = entryFeePopup.GetComponent<RectTransform>();
+        if (rt == null) return;
 
-    // ===================== HELPER =====================
+        rt.localScale = Vector3.zero;
+        popupTween?.Kill();
+        popupTween = rt.DOScale(1f, 0.35f).SetEase(Ease.OutBack);
+    }
+
+    void AnimatePopupClose(Action onComplete)
+    {
+        RectTransform rt = entryFeePopup.GetComponent<RectTransform>();
+        if (rt == null) { onComplete?.Invoke(); return; }
+
+        popupTween?.Kill();
+        popupTween = rt.DOScale(0f, 0.25f)
+            .SetEase(Ease.InBack)
+            .OnComplete(() =>
+            {
+                entryFeePopup.SetActive(false);
+                onComplete?.Invoke();
+            });
+    }
+
+    void AnimateCoinText()
+    {
+        if (coinText == null) return;
+        RectTransform rt = coinText.rectTransform;
+
+        coinTween?.Kill();
+        coinTween = rt.DOPunchScale(Vector3.one * 0.25f, 0.3f, 10, 1f);
+    }
+
+    void AnimateDailyReward()
+    {
+        if (dailyRewardText == null) return;
+        RectTransform rt = dailyRewardText.rectTransform;
+
+        dailyTween?.Kill();
+        dailyTween = rt.DOScale(1.1f, 0.5f).SetLoops(-1, LoopType.Yoyo);
+    }
+
+    void AnimateAddCoins()
+    {
+        if (addCoinsText == null) return;
+
+        addCoinsText.DOFade(1f, 0.3f).SetLoops(6, LoopType.Yoyo);
+    }
+
     bool IsTextClicked(TextMeshProUGUI tmp)
     {
         if (tmp == null) return false;
