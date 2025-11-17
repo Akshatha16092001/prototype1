@@ -320,7 +320,7 @@ public class LobbyManager : MonoBehaviour
         dailyTween = rt.DOScale(1.1f, 0.5f).SetLoops(-1, LoopType.Yoyo);
     }
 
-    void AnimateAddCoins()
+    void AnimateAddCoins()//Animations
     {
         if (addCoinsText == null) return;
 
